@@ -44,7 +44,8 @@ def test_full_pipeline(green_image, stub_config, tmp_path):
     assert result["segmentation"]["leaf_coverage"] > 0
     expected = {"mean_r", "mean_g", "mean_b", "median_g", "exg", "leaf_coverage"}
     assert expected <= set(result["features"])
-    assert "ndvi" not in result
+    assert result["ndvi"]["status"] == "unavailable"
+    assert result["fertilization"]["status"] == "unavailable"
     assert result["greenness"]["metric"] == "exg"
     assert result["greenness"]["value"] > 0
     assert (tmp_path / "out" / "prediction.json").is_file()

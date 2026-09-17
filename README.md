@@ -26,8 +26,9 @@ cd /path/to/DrHorticulture-Ver6    # from the repo root
 source .venv/bin/activate          # you only need this once per terminal
 pip install -e ".[ml,dev]"         # first time only: installs the heavy ML tools
 
-plantvision path/to/a/plant.jpg                    # basic run
-plantvision path/to/a/plant.jpg --save-mask --save-overlay --json   # + pictures & detail
+plantvision path/to/a/plant.jpg                    # prints greenness + species
+plantvision path/to/a/plant.jpg --debug            # + image path, coverage, saved files
+plantvision path/to/a/plant.jpg --save-mask --save-overlay --json   # + pictures & full JSON
 ```
 
 Tip: use a clear photo of a **whole potted plant** (pot + leaves). The built-in
@@ -43,6 +44,10 @@ is leaf, the average leaf colors, the **greenness** score
 (`greenness.value` = average excess green `2G - R - B` across leaf pixels),
 and the predicted **species** (`species.label`, with a confidence and the
 next-best candidates under `species.top_k`).
+
+`ndvi` and `fertilization` are present as placeholders with
+`"status": "unavailable"` until real sensor NDVI and the fertilizer logic
+exist.
 
 ## Folder tour
 

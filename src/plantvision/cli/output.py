@@ -12,11 +12,22 @@ _GREENNESS_DESCRIPTIONS = {
     "green_ratio": "average green ratio (G / (R + G + B)) over leaf pixels, 0-1 scale",
 }
 
+_NDVI_UNAVAILABLE_REASON = "No sensor-trained NDVI model is available yet."
+_FERTILIZATION_UNAVAILABLE_REASON = "A fertilization recommendation requires NDVI."
+
+
+def _fertilization_block():
+    return {
+        "status": "unavailable",
+        "reason": _FERTILIZATION_UNAVAILABLE_REASON,
+    }
+
 
 def _prediction_block(prediction):
     if prediction.type == "model":
         return {
             "ndvi": {
+                "status": "available",
                 "value": round(float(prediction.value), 6),
                 "model": prediction.model_name,
             }
@@ -56,6 +67,10 @@ def build_result(
     result.update(_prediction_block(ndvi_prediction))
     if species_prediction is not None:
         result["species"] = species_prediction.as_dict()
+    result.setdefault(
+        "ndvi", {"status": "unavailable", "reason": _NDVI_UNAVAILABLE_REASON}
+    )
+    result["fertilization"] = _fertilization_block()
     return result
 
 

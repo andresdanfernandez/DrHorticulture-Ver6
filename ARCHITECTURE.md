@@ -1135,6 +1135,14 @@ A JSON result could contain:
     "top_k": [
       {"label": "Digitalis purpurea", "confidence": 0.0944}
     ]
+  },
+  "ndvi": {
+    "status": "unavailable",
+    "reason": "No sensor-trained NDVI model is available yet."
+  },
+  "fertilization": {
+    "status": "unavailable",
+    "reason": "A fertilization recommendation requires NDVI."
   }
 }
 ```

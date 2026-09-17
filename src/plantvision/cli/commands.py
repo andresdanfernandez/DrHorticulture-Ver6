@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 
 from plantvision import (
@@ -16,6 +17,24 @@ from plantvision.segmentation.predictor import SegmentationPredictor
 from plantvision.species.predictor import SpeciesPredictor
 from plantvision.utils.logging import configure_logging, get_logger
 from plantvision.utils.paths import default_output_dir
+
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+
+
+def _ndvi_summary(result):
+    ndvi = result.get("ndvi") or {}
+    if ndvi.get("status") == "available":
+        return f"NDVI: {ndvi['value']:.4f}"
+    return "NDVI: Unavailable"
+
+
+def _fertilization_summary(result):
+    fertilization = result.get("fertilization") or {}
+    if fertilization.get("status") == "available":
+        return f"Fertilization recommendation: {fertilization['recommendation']}"
+    return "Fertilization recommendation: Unavailable"
 
 
 def run_pipeline(
@@ -99,15 +118,24 @@ def build_parser():
     parser.add_argument("--save-mask", action="store_true", help="Write outputs/mask.png")
     parser.add_argument("--save-overlay", action="store_true", help="Write outputs/overlay.png")
     parser.add_argument("--json", action="store_true", help="Print the full result as JSON")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show detailed output (image path, leaf coverage, metrics, saved files)",
+    )
     parser.add_argument("--output-dir", default=None, help="Directory for output artifacts")
-    parser.add_argument("--log-level", default="INFO", help="Logging level")
+    parser.add_argument(
+        "--log-level",
+        default=None,
+        help="Logging level (default: WARNING; DEBUG when --debug is set)",
+    )
     parser.add_argument("--version", action="version", version=f"plantvision {__version__}")
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    configure_logging(args.log_level)
+    configure_logging(args.log_level or ("DEBUG" if args.debug else "WARNING"))
     logger = get_logger("cli")
     try:
         overrides = {}
@@ -130,7 +158,7 @@ def main(argv=None):
 
         if args.json:
             print(json.dumps(result, indent=2))
-        else:
+        elif args.debug:
             print(f"image: {result['image']}")
             print(f"leaf coverage: {result['segmentation']['leaf_coverage']:.4f}")
             greenness = result.get("greenness")
@@ -139,14 +167,22 @@ def main(argv=None):
                     f"greenness (avg {greenness['metric']}): "
                     f"{greenness['value']:.2f}"
                 )
-            ndvi = result.get("ndvi")
-            if ndvi:
-                print(f"ndvi estimate: {ndvi['value']:.4f}")
+            print(_ndvi_summary(result))
             species = result.get("species")
             if species:
                 print(f"species: {species['label']} ({species['confidence']:.2f})")
+            print(_fertilization_summary(result))
             for name, path in outcome["artifacts"].items():
                 print(f"saved {name}: {path}")
+        else:
+            greenness = result.get("greenness")
+            if greenness:
+                print(f"greenness: {greenness['value']:.2f}")
+            species = result.get("species")
+            if species:
+                print(f"species: {species['label']} ({species['confidence']:.2f})")
+            print(_ndvi_summary(result))
+            print(_fertilization_summary(result))
         return 0
     except PlantVisionError as exc:
         logger.error("%s", exc)
