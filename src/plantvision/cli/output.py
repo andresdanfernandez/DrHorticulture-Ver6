@@ -7,9 +7,40 @@ from plantvision.segmentation.visualization import (
 )
 from plantvision.utils.paths import ensure_dir
 
+_GREENNESS_DESCRIPTIONS = {
+    "exg": "average excess green (2G - R - B) over leaf pixels, 0-255 scale",
+    "green_ratio": "average green ratio (G / (R + G + B)) over leaf pixels, 0-1 scale",
+}
 
-def build_result(image_path, segmentation_result, features, ndvi_prediction):
+
+def _prediction_block(prediction):
+    if prediction.type == "model":
+        return {
+            "ndvi": {
+                "value": round(float(prediction.value), 6),
+                "model": prediction.model_name,
+            }
+        }
+    method = prediction.method or "exg"
     return {
+        "greenness": {
+            "value": round(float(prediction.value), 6),
+            "metric": method,
+            "description": _GREENNESS_DESCRIPTIONS.get(
+                method, f"average {method} over leaf pixels"
+            ),
+        }
+    }
+
+
+def build_result(
+    image_path,
+    segmentation_result,
+    features,
+    ndvi_prediction,
+    species_prediction=None,
+):
+    result = {
         "image": str(image_path),
         "segmentation": {
             "leaf_pixels": int(segmentation_result.combined_mask.sum()),
@@ -21,8 +52,11 @@ def build_result(image_path, segmentation_result, features, ndvi_prediction):
             for key, value in features.to_dict().items()
         },
         "feature_order": list(features.feature_names),
-        "ndvi": ndvi_prediction.as_dict(),
     }
+    result.update(_prediction_block(ndvi_prediction))
+    if species_prediction is not None:
+        result["species"] = species_prediction.as_dict()
+    return result
 
 
 def _write_json(data, path):

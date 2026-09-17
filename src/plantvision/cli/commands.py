@@ -13,6 +13,7 @@ from plantvision.features.extractor import FeatureExtractor
 from plantvision.input.image_loader import load_image
 from plantvision.ndvi.predictor import NDVIPredictor
 from plantvision.segmentation.predictor import SegmentationPredictor
+from plantvision.species.predictor import SpeciesPredictor
 from plantvision.utils.logging import configure_logging, get_logger
 from plantvision.utils.paths import default_output_dir
 
@@ -21,6 +22,7 @@ def run_pipeline(
     image_path,
     config,
     segmentation_model=None,
+    species_model=None,
     output_dir=None,
     save_mask=False,
     save_overlay=False,
@@ -42,6 +44,16 @@ def run_pipeline(
         if int(segmentation_result.combined_mask.sum()) == 0:
             raise SegmentationError("Segmentation returned no usable leaf pixels.")
 
+    if species_model is not None:
+        species_predictor = SpeciesPredictor(species_model, crop="mask")
+    else:
+        species_predictor = SpeciesPredictor.from_config(config)
+    species_prediction = (
+        species_predictor.classify(image, segmentation_result.combined_mask)
+        if species_predictor is not None
+        else None
+    )
+
     features_include = config.section("features").get("include") or None
     features = FeatureExtractor(feature_keys=features_include).extract(
         image.array, segmentation_result.combined_mask
@@ -49,7 +61,13 @@ def run_pipeline(
 
     prediction = NDVIPredictor.from_config(config).predict(features)
 
-    result = build_result(image_path, segmentation_result, features, prediction)
+    result = build_result(
+        image_path,
+        segmentation_result,
+        features,
+        prediction,
+        species_prediction=species_prediction,
+    )
     artifacts = save_outputs(
         result,
         output_dir or default_output_dir(),
@@ -58,15 +76,15 @@ def run_pipeline(
         save_mask=save_mask,
         save_overlay=save_overlay,
     )
-    logger.info("Predicted NDVI %s (%s)", prediction.value, prediction.type)
+    logger.info("Prediction %s (%s)", prediction.value, prediction.type)
     return {"result": result, "artifacts": artifacts}
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="plantvision",
-        description="Segment the leaf region of an RGB plant image, extract RGB "
-        "features, and produce an NDVI estimate.",
+        description="Segment the leaf region of an RGB plant image, estimate its "
+        "greenness, and predict the plant species.",
     )
     parser.add_argument("image", help="Path to the input RGB plant image")
     parser.add_argument("--config-dir", default=None, help="Directory containing the YAML configs")
@@ -113,10 +131,20 @@ def main(argv=None):
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            ndvi = result["ndvi"]
             print(f"image: {result['image']}")
             print(f"leaf coverage: {result['segmentation']['leaf_coverage']:.4f}")
-            print(f"ndvi estimate: {ndvi['value']:.4f} ({ndvi['type']})")
+            greenness = result.get("greenness")
+            if greenness:
+                print(
+                    f"greenness (avg {greenness['metric']}): "
+                    f"{greenness['value']:.2f}"
+                )
+            ndvi = result.get("ndvi")
+            if ndvi:
+                print(f"ndvi estimate: {ndvi['value']:.4f}")
+            species = result.get("species")
+            if species:
+                print(f"species: {species['label']} ({species['confidence']:.2f})")
             for name, path in outcome["artifacts"].items():
                 print(f"saved {name}: {path}")
         return 0
